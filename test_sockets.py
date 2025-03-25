@@ -61,7 +61,7 @@ async def main():
         if connect == "y": 
                 peer_ip= input("Enter peer IP: ")
                 peer_port = int(input("Enter peer port: "))
-                writer = await node.connect_to_peer( peer_ip, peer_port) 
+                reader, writer = await node.connect_to_peer( peer_ip, peer_port) 
 
                 if writer: 
                         while True: 
@@ -71,6 +71,6 @@ async def main():
                                         writer.close()
                                         exit
                                 
-                                await writer.send_message(writer,message)
+                                await node.send_message(writer,message)
 
 asyncio.run(main())
