@@ -3,7 +3,7 @@ import select
 import sys
 import asyncio
 
-IP_address = "10.239.109.169" #CHANGE TO IP ADDRESS
+IP_address = "" #CHANGE TO IP ADDRESS
 port = int(input("Enter the port number: "))
 
 
