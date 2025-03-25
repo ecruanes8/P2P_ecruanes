@@ -15,7 +15,7 @@ class Node:
                 self.clients = set() # set a list of clients 
         async def start_server(self): 
                 self.server = await asyncio.start_server(self.handle_client, self.ip, self.port)
-                print("server listening on {self.ip}:{self.port}")
+                print(f"server listening on {self.ip}:{self.port}")
                 async with self.server: 
                         await self.server.serve_forever() 
         async def handle_client(self,reader,writer): 
@@ -52,7 +52,9 @@ class Node:
                 await writer.drain()
 async def main(): 
         node = Node(IP_address, port)
-        await node.start_server()
+         # Start the server in the background
+        asyncio.create_task(node.start_server())
+
 
         #connecting to peer
         connect = input("Do you want to connect to a peer? (y/n): ")
@@ -64,7 +66,7 @@ async def main():
                 if writer: 
                         while True: 
                                 message = input("Message to send (or type quit): ")
-                                if message.lower == "quit":  
+                                if message.lower() == "quit":  
                                         print("Exiting...")
                                         writer.close()
                                         exit
