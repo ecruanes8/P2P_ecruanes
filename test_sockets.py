@@ -1,69 +1,74 @@
 import socket
 import select 
 import sys
+import asyncio
 
-from _thread import *
+IP_address = "10.239.109.169" #CHANGE TO IP ADDRESS
+port = int(input("Enter the port number: "))
 
-server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 
-if len(sys.argv) != 3: 
-    print("Correct usage: script, IP address, port number")
-    exit() 
-
-IP_address = str(sys.argv[1])
-
-port = int(sys.argv[2])
-
-server.bind((IP_address,port))
-
-server.listen(100) # listens for 100 active connections 
-
-list_of_clients = [] 
-
-def clientthread(conn, addr):  #conn is user object
-    conn.send("Welcome to the chatroom!".encode())
-
-    while True: 
-        try:
-            message = conn.recv(2048)
-            if message: 
-                print ("<" + addr[0] + "> " + message)  #prints address and message of client 
-
-                # Calls broadcast function to send message to all 
-                message_to_send = "<" + addr[0] + "> " + message 
-                broadcast(message_to_send, conn)
-            else: 
-                remove(conn)
-        except: 
-            continue 
-
-def broadcast(message,connection): 
-    for clients in list_of_clients: 
-            if clients!=connection: 
+class Node: 
+        def __init__(self, ip,port): 
+                self.ip = ip
+                self.port = port # set port number
+                self.server = None
+                self.clients = set() # set a list of clients 
+        async def start_server(self): 
+                self.server = await asyncio.start_server(self.handle_client, self.ip, self.port)
+                print("server listening on {self.ip}:{self.port}")
+                async with self.server: 
+                        await self.server.serve_forever() 
+        async def handle_client(self,reader,writer): 
+                addr = writer.get_extra_info('peername')
+                print(f"{addr} connected")
+                self.clients.add(writer)
                 try: 
-                    clients.send(message) 
+                        while True:
+                                data = await reader.read(100)
+                                message = data.decode()
+                                if message: 
+                                        print(f"<{addr}> {message}")
+                                        await self.broadcast(message,writer)
+                                else:
+                                        break
                 except: 
-                    clients.close() 
-    
-                    # if the link is broken, we remove the client 
-                    remove(clients) 
- 
-def remove(connection): 
-    if connection in list_of_clients:
-        list_of_clients.remove(connection)
+                        pass
+                finally: 
+                        self.clients.remove(writer)
+                        writer.close()
+                        await writer.wait_closed()
+        async def broadcast(self,message, writer): 
+                for client in self.clients: # for each client 
+                        if client != writer: 
+                                client.write(message.encode())
+                                await client.drain()
+        async def connect_to_peer(self, peer_ip, peer_port): # pass ip address and port number to connect to other peers
+            reader, writer = await asyncio.open_connection(peer_ip, peer_port)
+            self.clients.add(writer)
+            print(f"Connected to {peer_ip}: {peer_port}")
+            return reader, writer
+        async def send_message(self, writer, message):
+                writer.write(message.encode())
+                await writer.drain()
+async def main(): 
+        node = Node(IP_address, port)
+        await node.start_server()
 
-while True: 
-    conn, addr = server.accept() 
+        #connecting to peer
+        connect = input("Do you want to connect to a peer? (y/n): ")
+        if connect == "y": 
+                peer_ip= input("Enter peer IP: ")
+                peer_port = int(input("Enter peer port: "))
+                writer = await node.connect_to_peer( peer_ip, peer_port) 
 
-    list_of_clients.append(conn) 
- 
-    # prints the address of the user that just connected 
-    print (addr[0] + " connected")
- 
-    # creates and individual thread for every user 
-    # that connects 
-    start_new_thread(clientthread,(conn,addr))     
- 
-conn.close() 
-server.close() 
+                if writer: 
+                        while True: 
+                                message = input("Message to send (or type quit): ")
+                                if message.lower == "quit":  
+                                        print("Exiting...")
+                                        writer.close()
+                                        exit
+                                
+                                await writer.send_message(writer,message)
+
+asyncio.run(main())
